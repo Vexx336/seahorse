@@ -278,6 +278,14 @@ def _announce_model_download(ctx: CliContext) -> None:
         return
     if _first_command(_CURRENT_ARGV) not in _EMBED_COMMANDS:
         return
+    # Only the local fastembed backend ever downloads this bundle. With an HTTP
+    # backend (SEAHORSE_EMBEDDING_BACKEND=openai/http) nothing is downloaded, so
+    # model_cached() is permanently False and this notice would fire on every
+    # single embed command -- a "one-time" warning that always fires trains the
+    # reader to ignore the line that matters on a real first run.
+    _backend = os.environ.get("SEAHORSE_EMBEDDING_BACKEND", "").strip().lower()
+    if _backend in {"openai", "http", "openai-compatible"}:
+        return
     try:
         from seahorse.embeddings.fastembed_backend import model_cached
 
