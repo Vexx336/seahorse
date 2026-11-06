@@ -706,3 +706,36 @@ def test_announce_model_download_silent_in_json_mode(monkeypatch, capsys):
     )
     _announce_model_download(CliContext(fmt="json", quiet=False))
     assert capsys.readouterr().out == ""
+
+
+def test_announce_model_download_silent_with_http_backend(monkeypatch, capsys):
+    """An HTTP embedding backend never downloads the local bundle.
+
+    model_cached() only knows the fastembed on-disk cache, so with
+    SEAHORSE_EMBEDDING_BACKEND=openai it is permanently False. Without this gate
+    the "one-time" notice fired on every embed command forever, which is how a
+    working install came to look broken.
+    """
+    from seahorse.cli.app import CliContext, _announce_model_download
+
+    monkeypatch.setattr("seahorse.cli.app._CURRENT_ARGV", ["recall", "deck1"])
+    monkeypatch.setattr(
+        "seahorse.embeddings.fastembed_backend.model_cached", lambda: False
+    )
+    for backend in ("openai", "http", "openai-compatible", "OPENAI", " http "):
+        monkeypatch.setenv("SEAHORSE_EMBEDDING_BACKEND", backend)
+        _announce_model_download(CliContext(fmt="human", quiet=False))
+        assert capsys.readouterr().out == "", f"banner leaked for backend {backend!r}"
+
+
+def test_announce_model_download_still_warns_for_local_backend(monkeypatch, capsys):
+    """The real first-run warning must survive the fix."""
+    from seahorse.cli.app import CliContext, _announce_model_download
+
+    monkeypatch.setattr("seahorse.cli.app._CURRENT_ARGV", ["recall", "deck1"])
+    monkeypatch.delenv("SEAHORSE_EMBEDDING_BACKEND", raising=False)
+    monkeypatch.setattr(
+        "seahorse.embeddings.fastembed_backend.model_cached", lambda: False
+    )
+    _announce_model_download(CliContext(fmt="human", quiet=False))
+    assert "First run" in capsys.readouterr().out
